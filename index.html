@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Video Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Loading animation -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/ring.css">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Animations -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <!-- Toast notifications -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf/notyf.min.css">
+    <style>
+        .gradient-background {
+            background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-background">
+    <div class="container mx-auto px-4 py-8">
+        <div class="glass-panel max-w-4xl mx-auto rounded-xl shadow-2xl p-8 animate__animated animate__fadeIn">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">AI Video Generator</h1>
+                <p class="text-gray-600">Create stunning AI-generated videos in seconds</p>
+            </div>
+
+            <div class="max-w-2xl mx-auto mb-8 space-y-6">
+                <!-- Scene Description Input -->
+                <div class="space-y-2">
+                    <label for="sceneDescription" class="block text-sm font-medium text-gray-700">Scene Description</label>
+                    <textarea id="sceneDescription" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows="3"
+                            placeholder="Describe the scene you want to generate (e.g., 'A serene beach at sunset with palm trees swaying')"
+                    >A Hospital scene</textarea>
+                </div>
+
+                <!-- Style Input -->
+                <div class="space-y-2">
+                    <label for="style" class="block text-sm font-medium text-gray-700">Style</label>
+                    <input type="text" 
+                           id="style" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           value="Realistic"
+                           placeholder="Enter the style (e.g., Realistic, Anime, Abstract)">
+                </div>
+
+                <!-- Motion Model Selection -->
+                <div class="space-y-2">
+                    <label for="motionModel" class="block text-sm font-medium text-gray-700">Motion Model</label>
+                    <select id="motionModel" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="guoyww/animatediff-motion-lora-zoom-in">Zoom In</option>
+                        <option value="guoyww/animatediff-motion-lora-zoom-out">Zoom Out</option>
+                        <option value="guoyww/animatediff-motion-lora-pan-left">Pan Left</option>
+                        <option value="guoyww/animatediff-motion-lora-pan-right">Pan Right</option>
+                    </select>
+                </div>
+
+                <!-- Number of Frames -->
+                <div class="space-y-2">
+                    <label for="frames" class="block text-sm font-medium text-gray-700">Number of Frames</label>
+                    <input type="number" 
+                           id="frames" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           value="4"
+                           min="1"
+                           max="16">
+                    <p class="text-xs text-gray-500">More frames = longer video, but slower generation (1-16 frames)</p>
+                </div>
+            </div>
+
+            <div class="flex justify-center mb-8">
+                <button onclick="generateVideo()" 
+                        id="generateBtn"
+                        class="bg-gradient-to-r from-blue-500 to-teal-400 text-white px-8 py-4 rounded-lg
+                               shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105
+                               flex items-center space-x-2 font-semibold">
+                    <i class="fas fa-magic"></i>
+                    <span>Generate Video</span>
+                </button>
+            </div>
+
+            <div id="status" class="hidden mb-6 p-4 rounded-lg text-center animate__animated animate__fadeIn"></div>
+
+            <div id="loading" class="hidden flex flex-col items-center justify-center space-y-4 my-8 animate__animated animate__fadeIn">
+                <l-ring size="40" stroke="3" bg-opacity="0" speed="2" color="rgb(59, 130, 246)"></l-ring>
+                <p class="text-gray-600 text-lg" id="loadingText">Initializing AI model...</p>
+            </div>
+
+            <div id="video-container" class="space-y-4 animate__animated animate__fadeIn">
+                <!-- Video will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center py-4 text-gray-600">
+        <p>Powered by Instant-Video AI</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/notyf/notyf.min.js"></script>
+    <script type="module">
+        import { client } from 'https://cdn.jsdelivr.net/npm/@gradio/client/+esm';
+
+        // Initialize notifications
+        const notyf = new Notyf({
+            duration: 3000,
+            position: { x: 'right', y: 'top' },
+            types: [
+                {
+                    type: 'success',
+                    background: '#10B981',
+                    icon: false
+                },
+                {
+                    type: 'error',
+                    background: '#EF4444',
+                    icon: false
+                }
+            ]
+        });
+
+        // Loading states
+        const loadingStates = [
+            "Initializing AI model...",
+            "Processing scene description...",
+            "Generating video frames...",
+            "Applying realistic effects...",
+            "Finalizing video..."
+        ];
+        let loadingInterval;
+
+        function updateLoadingText() {
+            const loadingText = document.getElementById('loadingText');
+            let currentIndex = 0;
+            loadingInterval = setInterval(() => {
+                loadingText.textContent = loadingStates[currentIndex];
+                currentIndex = (currentIndex + 1) % loadingStates.length;
+            }, 3000);
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const generateBtn = document.getElementById('generateBtn');
+            if (show) {
+                loading.classList.remove('hidden');
+                generateBtn.disabled = true;
+                generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                updateLoadingText();
+            } else {
+                loading.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                clearInterval(loadingInterval);
+            }
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.classList.remove('hidden', 'bg-green-100', 'bg-red-100', 'text-green-800', 'text-red-800');
+            
+            if (type === 'success') {
+                statusDiv.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                statusDiv.classList.add('bg-red-100', 'text-red-800');
+            }
+            
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+
+        async function saveVideoLocally(videoUrl, filename) {
+            try {
+                // In production, we'll use the video URL directly
+                if (window.location.hostname !== 'localhost') {
+                    return;
+                }
+
+                const response = await fetch('http://localhost:3000/save-video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ videoUrl, filename }),
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    notyf.success('Video saved successfully!');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                // In production, we'll skip the local save error
+                if (window.location.hostname === 'localhost') {
+                    notyf.error('Error saving video locally');
+                    console.error('Error saving video:', error);
+                }
+            }
+        }
+
+        window.generateVideo = async function() {
+            try {
+                // Get user inputs
+                const sceneDescription = document.getElementById('sceneDescription').value.trim();
+                const style = document.getElementById('style').value.trim();
+                const motionModel = document.getElementById('motionModel').value;
+                const frames = parseInt(document.getElementById('frames').value);
+
+                // Validate inputs
+                if (!sceneDescription) {
+                    notyf.error('Please enter a scene description');
+                    return;
+                }
+                if (!style) {
+                    notyf.error('Please enter a style');
+                    return;
+                }
+                if (frames < 1 || frames > 16) {
+                    notyf.error('Number of frames must be between 1 and 16');
+                    return;
+                }
+
+                showLoading(true);
+                const app = await client("KingNish/Instant-Video");
+                
+                const result = await app.predict("/instant_video", [
+                    sceneDescription,
+                    style,
+                    motionModel,
+                    frames
+                ]);
+
+                showLoading(false);
+                notyf.success('Video generated successfully!');
+                
+                // Create video element with modern styling
+                const videoContainer = document.getElementById('video-container');
+                videoContainer.innerHTML = '';
+                
+                const videoWrapper = document.createElement('div');
+                videoWrapper.className = 'rounded-lg overflow-hidden shadow-lg bg-black';
+                
+                const video = document.createElement('video');
+                video.controls = true;
+                video.src = result.data[0].video.url;
+                video.className = 'w-full';
+                videoWrapper.appendChild(video);
+                videoContainer.appendChild(videoWrapper);
+
+                // Generate filename with timestamp and scene description
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const safeDescription = sceneDescription.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+                const filename = `${safeDescription}-${timestamp}.mp4`;
+
+                // Add download button with modern styling
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'flex justify-center space-x-4 mt-4';
+                
+                const downloadLink = document.createElement('a');
+                downloadLink.href = result.data[0].video.url;
+                downloadLink.download = filename;
+                downloadLink.className = 'bg-teal-500 text-white px-6 py-3 rounded-lg shadow hover:bg-teal-600 ' +
+                                      'transition-colors duration-300 flex items-center space-x-2';
+                downloadLink.innerHTML = '<i class="fas fa-download"></i><span>Download Video</span>';
+                buttonContainer.appendChild(downloadLink);
+                videoContainer.appendChild(buttonContainer);
+
+                // Save video locally
+                await saveVideoLocally(result.data[0].video.url, filename);
+            } catch (error) {
+                showLoading(false);
+                notyf.error(error.message);
+                console.error("Error generating video:", error);
+            }
+        }
+    </script>
+</body>
+</html> 
